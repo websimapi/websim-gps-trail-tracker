@@ -420,21 +420,49 @@ class TrailTracker {
             return;
         }
 
-        try {
-            this.videoStream = navigator.mediaDevices.getUserMedia({ 
-                video: { 
-                    facingMode: "environment", // Prefer rear camera
-                    width: { ideal: 1280 }, // Request a reasonable resolution
-                    height: { ideal: 720 } 
-                } 
-            });
-            this.dom.cameraFeed.srcObject = this.videoStream;
-            this.dom.cameraModal.style.display = 'flex';
-        } catch (err) {
-            console.error("Error accessing camera:", err);
-            alert("Could not access camera. Please check permissions. Error: " + err.message);
-            this.updateStatus("Camera error: " + err.name);
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            alert("Camera access is not supported by your browser.");
+            this.updateStatus("Camera not supported");
+            return;
         }
+
+        navigator.mediaDevices.getUserMedia({ 
+            video: { 
+                facingMode: "environment", // Prefer rear camera
+                width: { ideal: 1280 }, 
+                height: { ideal: 720 } 
+            } 
+        })
+        .then(stream => {
+            this.videoStream = stream;
+            this.dom.cameraFeed.srcObject = this.videoStream;
+            // Ensure autoplay is triggered if not already
+            this.dom.cameraFeed.play().catch(e => console.warn("Video play interrupted:", e));
+            this.dom.cameraModal.style.display = 'flex';
+        })
+        .catch(err => {
+            console.error("Error accessing camera:", err);
+            let userMessage = "Could not access camera. ";
+            
+            if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
+                userMessage += "Permission denied. Please grant camera permission in your browser settings.";
+            } else if (err.name === "NotFoundError" || err.name === "DevicesNotFoundError") {
+                userMessage += "No camera found on this device.";
+            } else if (err.name === "NotReadableError" || err.name === "TrackStartError" || err.name === "SourceUnavailableError") {
+                userMessage += "Camera is already in use, temporarily unavailable, or a hardware error occurred.";
+            } else if (err.name === "OverconstrainedError" || err.name === "ConstraintNotSatisfiedError") {
+                 userMessage += "The camera doesn't support the requested settings (e.g., resolution).";
+            } else if (err.name === "AbortError") {
+                userMessage += "Camera access was aborted. This might be due to a browser or OS issue."
+            }
+            else {
+                userMessage += `An unknown error occurred: ${err.name || "Unknown Error"}. Check console for details.`;
+            }
+            
+            alert(userMessage);
+            this.updateStatus("Camera error: " + (err.name || "Unknown"));
+            this.closeCamera(); // Ensure modal is closed if it somehow opened
+        });
     }
 
     closeCamera() {
