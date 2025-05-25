@@ -265,7 +265,6 @@ class TrailTracker {
         this.displayedTrails.set(trailId, polyline);
         this.map.fitBounds(polyline.getBounds());
         this.renderTrailsList(); // Update button states
-        this.closeTrailsModal();
     }
 
     deleteTrail(trailId) {
