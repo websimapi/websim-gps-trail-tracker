@@ -234,7 +234,7 @@ class TrailTracker {
                     ${trail.description ? `<div style="margin-top: 5px; color: #ccc;">${trail.description}</div>` : ''}
                 </div>
                 <div class="trail-actions">
-                    <button class="btn btn-small" style="background: ${isDisplayed ? '#ff9500' : '#5352ed'};" onclick="app.showTrail('${trail.id}')">${isDisplayed ? 'Hide' : 'Show'}</button>
+                    <button class="btn btn-small" style="background: ${isDisplayed ? '#ff4757' : '#5352ed'};" onclick="app.showTrail('${trail.id}')">${isDisplayed ? 'Hide' : 'Show'}</button>
                     <button class="btn btn-small" style="background: #ff4757;" onclick="app.deleteTrail('${trail.id}')">Delete</button>
                 </div>
             `;
@@ -265,6 +265,7 @@ class TrailTracker {
         this.displayedTrails.set(trailId, polyline);
         this.map.fitBounds(polyline.getBounds());
         this.renderTrailsList(); // Update button states
+        this.closeTrailsModal();
     }
 
     deleteTrail(trailId) {
