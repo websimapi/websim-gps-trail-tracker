@@ -223,7 +223,7 @@ class TrailTracker {
             return;
         }
 
-        this.savedTrails.forEach(trail => {
+        this.savedTrails.sort((a, b) => b.createdAt - a.createdAt).forEach(trail => {
             const isDisplayed = this.displayedTrails.has(trail.id);
             const item = document.createElement('div');
             item.className = 'trail-item';
@@ -231,7 +231,7 @@ class TrailTracker {
                 <div class="trail-info">
                     <h4>${trail.name}</h4>
                     <small>${new Date(trail.createdAt).toLocaleDateString()} • ${Math.round(trail.distance)}m • ${trail.points.length} points</small>
-                    ${trail.description ? `<div style="margin-top: 5px; color: #ccc;">${trail.description}</div>` : ''}
+                    ${trail.description ? `<div style="margin-top: 5px; color: #ccc; font-size: 0.9em;">${trail.description}</div>` : ''}
                 </div>
                 <div class="trail-actions">
                     <button class="btn btn-small" style="background: ${isDisplayed ? '#ff4757' : '#5352ed'};" onclick="app.showTrail('${trail.id}')">${isDisplayed ? 'Hide' : 'Show'}</button>
@@ -285,7 +285,14 @@ class TrailTracker {
 
     loadTrails() {
         const saved = localStorage.getItem('gpsTrails');
-        return saved ? JSON.parse(saved) : [];
+        try {
+            const trails = saved ? JSON.parse(saved) : [];
+            // Ensure trails are objects and have an id
+            return trails.filter(trail => typeof trail === 'object' && trail !== null && 'id' in trail);
+        } catch (e) {
+            console.error("Error parsing saved trails:", e);
+            return [];
+        }
     }
 
     saveTrails() {
