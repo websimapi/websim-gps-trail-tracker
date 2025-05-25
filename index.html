@@ -16,6 +16,7 @@
 
     <div class="controls">
         <button class="btn btn-record" id="recordBtn">Start Recording</button>
+        <button class="btn" id="cameraBtn" style="display: none;"><img src="camera-icon.png" alt="Camera" class="btn-icon"></button>
         <button class="btn btn-save" id="saveBtn" style="display: none;">Save Trail</button>
         <button class="btn btn-trails" id="trailsBtn">View Trails</button>
     </div>
@@ -50,15 +51,32 @@
         </div>
     </div>
 
+    <!-- Camera Modal -->
+    <div class="modal" id="cameraModal">
+        <div class="modal-content camera-modal-content">
+            <h3>Take Photo</h3>
+            <video id="cameraFeed" autoplay playsinline></video>
+            <canvas id="photoCanvas" style="display:none;"></canvas>
+            <div class="modal-buttons">
+                <button class="btn btn-cancel" id="cancelCameraBtn">Cancel</button>
+                <button class="btn btn-record" id="capturePhotoBtn">Capture</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Photo View Modal -->
+    <div class="modal" id="photoViewModal">
+        <div class="modal-content photo-view-modal-content">
+            <h3>Photo Preview</h3>
+            <img id="photoDisplay" alt="Captured photo">
+            <div class="modal-buttons">
+                <button class="btn btn-cancel" id="closePhotoViewBtn">Close</button>
+            </div>
+        </div>
+    </div>
+
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="app.js"></script>
 <script defer src="https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516" integrity="sha512-8DS7rgIrAmghBFwoOTujcf6D9rXvH8xm8JQ1Ja01h9QX8EzXldiszufYa4IFfKdLUKTTrnSFXLDkUEOTrZQ8Qg==" data-cf-beacon='{"version":"2024.11.0","token":"4c6229722a6346bc8eb5cb0e5eae5d41","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
 </body>
 </html>
-```
-
-Note: You will also need to create `styles.css` and `app.js` files in the same directory as the `index.html` file, and move the corresponding code from the original file into these new files.
-
-For `styles.css`, move the entire `<style>` block from the original file.
-
-For `app.js`, move the entire `<script>` block from the original file.

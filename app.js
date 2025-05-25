@@ -6,24 +6,38 @@ class TrailTracker {
         this.currentTrailPolyline = null;
         this.isRecording = false;
         this.watchId = null;
+        this.currentTrailPhotos = []; // To store photos for the current trail
+        this.photoMarkersOnMap = new Map(); // To manage photo markers on the map: trailId -> [L.Marker]
+        this.photoIcon = null; // Leaflet icon for photo markers
+        this.videoStream = null; // To store the camera stream
         
         // Cache DOM elements
         this.dom = {
             recordBtn: document.getElementById('recordBtn'),
             saveBtn: document.getElementById('saveBtn'),
             trailsBtn: document.getElementById('trailsBtn'),
+            cameraBtn: document.getElementById('cameraBtn'), // New camera button
             saveModal: document.getElementById('saveModal'),
             trailNameInput: document.getElementById('trailName'),
             trailDescriptionInput: document.getElementById('trailDescription'),
             trailsModal: document.getElementById('trailsModal'),
             trailsListContainer: document.getElementById('trailsList'),
             statusDisplay: document.getElementById('status'),
+            cameraModal: document.getElementById('cameraModal'), // New camera modal
+            cameraFeed: document.getElementById('cameraFeed'), // Video element
+            photoCanvas: document.getElementById('photoCanvas'), // Canvas for photo capture
+            capturePhotoBtn: document.getElementById('capturePhotoBtn'),
+            cancelCameraBtn: document.getElementById('cancelCameraBtn'),
+            photoViewModal: document.getElementById('photoViewModal'), // Photo view modal
+            photoDisplay: document.getElementById('photoDisplay'), // Img element for photo
+            closePhotoViewBtn: document.getElementById('closePhotoViewBtn'),
         };
         
-        this.savedTrails = this.loadTrails(); // Load trails and ensure IDs are strings
+        this.savedTrails = this.loadTrails();
         this.displayedTrails = new Map();
         
         this.initMap();
+        this.initPhotoIcon();
         this.setupEventListeners();
         this.startLocationTracking();
     }
@@ -36,10 +50,23 @@ class TrailTracker {
         }).addTo(this.map);
     }
 
+    initPhotoIcon() {
+        this.photoIcon = L.icon({
+            iconUrl: 'photo-location-icon.png',
+            iconSize: [25, 25], // size of the icon
+            iconAnchor: [12, 12], // point of the icon which will correspond to marker's location
+            popupAnchor: [0, -12] // point from which the popup should open relative to the iconAnchor
+        });
+    }
+
     setupEventListeners() {
         this.dom.recordBtn.addEventListener('click', () => this.toggleRecording());
         this.dom.saveBtn.addEventListener('click', () => this.showSaveModal());
         this.dom.trailsBtn.addEventListener('click', () => this.showTrailsModal());
+        this.dom.cameraBtn.addEventListener('click', () => this.openCamera());
+        this.dom.capturePhotoBtn.addEventListener('click', () => this.takePicture());
+        this.dom.cancelCameraBtn.addEventListener('click', () => this.closeCamera());
+        this.dom.closePhotoViewBtn.addEventListener('click', () => this.closePhotoViewModal());
     }
 
     startLocationTracking() {
@@ -116,17 +143,29 @@ class TrailTracker {
             this.dom.recordBtn.textContent = 'Start Recording';
             this.dom.recordBtn.classList.remove('recording');
         }
+        this.updateCameraBtnVisibility();
     }
 
     startRecording() {
         this.isRecording = true;
         this.currentTrail = [];
+        this.currentTrailPhotos = []; // Reset photos for new trail
         this.updateStatus('Recording trail...');
+        this.updateCameraBtnVisibility();
     }
 
     stopRecording() {
         this.isRecording = false;
-        this.updateStatus(`Trail recorded: ${this.currentTrail.length} points`);
+        this.updateStatus(`Trail recorded: ${this.currentTrail.length} points, ${this.currentTrailPhotos.length} photos`);
+        this.updateCameraBtnVisibility();
+    }
+
+    updateCameraBtnVisibility() {
+        if (this.isRecording && this.userMarker) { // Only show if recording and location is known
+            this.dom.cameraBtn.style.display = 'block';
+        } else {
+            this.dom.cameraBtn.style.display = 'none';
+        }
     }
 
     updateCurrentTrailDisplay() {
@@ -163,10 +202,11 @@ class TrailTracker {
         }
 
         const trail = {
-            id: String(Date.now()), // Ensure ID is a string
+            id: String(Date.now()),
             name,
             description,
             points: this.currentTrail,
+            photos: this.currentTrailPhotos, // Add photos
             createdAt: new Date().toISOString(),
             distance: this.calculateDistance(this.currentTrail)
         };
@@ -174,7 +214,7 @@ class TrailTracker {
         this.savedTrails.push(trail);
         this.saveTrails();
         this.closeSaveModal();
-        this.clearCurrentTrail();
+        this.clearCurrentTrail(); // This will also clear currentTrailPhotos
         this.updateStatus(`Trail "${name}" saved!`);
     }
 
@@ -208,6 +248,7 @@ class TrailTracker {
 
     clearCurrentTrail() {
         this.currentTrail = [];
+        this.currentTrailPhotos = []; // Clear photos
         if (this.currentTrailPolyline) {
             this.map.removeLayer(this.currentTrailPolyline);
             this.currentTrailPolyline = null;
@@ -216,6 +257,7 @@ class TrailTracker {
         this.dom.recordBtn.textContent = 'Start Recording';
         this.dom.recordBtn.classList.remove('recording');
         this.isRecording = false;
+        this.updateCameraBtnVisibility(); // Hide camera button
     }
 
     showTrailsModal() {
@@ -232,37 +274,53 @@ class TrailTracker {
             return;
         }
         
-        // Sort by creation date, newest first
         const sortedTrails = [...this.savedTrails].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
         sortedTrails.forEach(trail => {
-            // trail.id is now guaranteed to be a string
             const isDisplayed = this.displayedTrails.has(trail.id);
+            const photoCount = trail.photos ? trail.photos.length : 0;
             const item = document.createElement('div');
             item.className = 'trail-item';
-            item.innerHTML = `
+            
+            // Trail header for name and actions
+            const header = document.createElement('div');
+            header.className = 'trail-header';
+            header.innerHTML = `
                 <div class="trail-info">
                     <h4>${trail.name}</h4>
-                    <small>${new Date(trail.createdAt).toLocaleDateString()} • ${Math.round(trail.distance)}m • ${trail.points.length} points</small>
-                    ${trail.description ? `<div style="margin-top: 5px; color: #ccc; font-size: 0.9em;">${trail.description}</div>` : ''}
+                    <small>${new Date(trail.createdAt).toLocaleDateString()} • ${Math.round(trail.distance)}m • ${trail.points.length} pts • ${photoCount} photos</small>
                 </div>
                 <div class="trail-actions">
                     <button class="btn btn-small" style="background: ${isDisplayed ? '#ff4757' : '#5352ed'};" onclick="app.showTrail('${trail.id}')">${isDisplayed ? 'Hide' : 'Show'}</button>
                     <button class="btn btn-small" style="background: #ff4757;" onclick="app.deleteTrail('${trail.id}')">Delete</button>
                 </div>
             `;
+            item.appendChild(header);
+
+            // Trail description if it exists
+            if (trail.description) {
+                const descriptionDiv = document.createElement('div');
+                descriptionDiv.className = 'trail-description';
+                descriptionDiv.textContent = trail.description;
+                item.appendChild(descriptionDiv);
+            }
+            
             container.appendChild(item);
         });
     }
 
-    showTrail(trailId) { // trailId is a string from onclick attribute
-        const trail = this.savedTrails.find(t => t.id === trailId); // t.id is string, trailId is string
+    showTrail(trailId) {
+        const trail = this.savedTrails.find(t => t.id === trailId);
         if (!trail) return;
+
+        // Clear existing photo markers for this trail before potentially re-adding or removing
+        this.clearPhotoMarkersForTrail(trailId);
 
         if (this.displayedTrails.has(trailId)) {
             this.map.removeLayer(this.displayedTrails.get(trailId));
             this.displayedTrails.delete(trailId);
-            this.renderTrailsList(); // Update button states in the modal
+            // Photo markers already cleared by clearPhotoMarkersForTrail
+            this.renderTrailsList(); 
             return;
         }
 
@@ -274,20 +332,43 @@ class TrailTracker {
         }).addTo(this.map);
 
         this.displayedTrails.set(trailId, polyline);
+        
+        // Display photo markers
+        if (trail.photos && trail.photos.length > 0) {
+            const markers = [];
+            trail.photos.forEach(photo => {
+                if (photo.lat && photo.lng) {
+                    const marker = L.marker([photo.lat, photo.lng], { icon: this.photoIcon })
+                        .addTo(this.map)
+                        .on('click', () => this.viewPhoto(photo.imageDataUrl));
+                    markers.push(marker);
+                }
+            });
+            this.photoMarkersOnMap.set(trailId, markers);
+        }
+
         this.map.fitBounds(polyline.getBounds());
-        this.renderTrailsList(); // Update button states in the modal
-        this.closeTrailsModal(); // Close modal after showing trail on map
+        this.renderTrailsList();
+        this.closeTrailsModal();
     }
 
-    deleteTrail(trailId) { // trailId is a string
+    clearPhotoMarkersForTrail(trailId) {
+        if (this.photoMarkersOnMap.has(trailId)) {
+            this.photoMarkersOnMap.get(trailId).forEach(marker => this.map.removeLayer(marker));
+            this.photoMarkersOnMap.delete(trailId);
+        }
+    }
+
+    deleteTrail(trailId) {
         if (confirm('Are you sure you want to delete this trail?')) {
-            this.savedTrails = this.savedTrails.filter(t => t.id !== trailId); // t.id is string
+            this.savedTrails = this.savedTrails.filter(t => t.id !== trailId);
             this.saveTrails();
             
             if (this.displayedTrails.has(trailId)) {
                 this.map.removeLayer(this.displayedTrails.get(trailId));
                 this.displayedTrails.delete(trailId);
             }
+            this.clearPhotoMarkersForTrail(trailId); // Also remove photo markers
             
             this.renderTrailsList();
         }
@@ -297,10 +378,13 @@ class TrailTracker {
         const saved = localStorage.getItem('gpsTrails');
         try {
             const trails = saved ? JSON.parse(saved) : [];
-            // Ensure trails are objects, have an id, and convert id to string for consistency
             return trails
                 .filter(trail => typeof trail === 'object' && trail !== null && 'id' in trail)
-                .map(trail => ({ ...trail, id: String(trail.id) }));
+                .map(trail => ({ 
+                    ...trail, 
+                    id: String(trail.id),
+                    photos: trail.photos || [] // Ensure photos array exists
+                }));
         } catch (e) {
             console.error("Error parsing saved trails:", e);
             localStorage.removeItem('gpsTrails'); // Clear corrupted data
@@ -325,6 +409,89 @@ class TrailTracker {
     closeTrailsModal() {
         this.dom.trailsModal.style.display = 'none';
     }
+
+    openCamera() {
+        if (!this.isRecording) {
+            alert("Please start recording a trail first.");
+            return;
+        }
+        if (!this.userMarker) {
+            alert("Waiting for location data to take a photo.");
+            return;
+        }
+
+        try {
+            this.videoStream = navigator.mediaDevices.getUserMedia({ 
+                video: { 
+                    facingMode: "environment", // Prefer rear camera
+                    width: { ideal: 1280 }, // Request a reasonable resolution
+                    height: { ideal: 720 } 
+                } 
+            });
+            this.dom.cameraFeed.srcObject = this.videoStream;
+            this.dom.cameraModal.style.display = 'flex';
+        } catch (err) {
+            console.error("Error accessing camera:", err);
+            alert("Could not access camera. Please check permissions. Error: " + err.message);
+            this.updateStatus("Camera error: " + err.name);
+        }
+    }
+
+    closeCamera() {
+        if (this.videoStream) {
+            this.videoStream.getTracks().forEach(track => track.stop());
+            this.videoStream = null;
+        }
+        this.dom.cameraFeed.srcObject = null; // Clear the video source
+        this.dom.cameraModal.style.display = 'none';
+    }
+
+    takePicture() {
+        if (!this.userMarker) {
+            alert("Cannot capture photo: current location unknown.");
+            this.closeCamera();
+            return;
+        }
+
+        const video = this.dom.cameraFeed;
+        const canvas = this.dom.photoCanvas;
+        
+        // Set canvas dimensions based on video, but cap at a max width for performance/storage
+        const maxWidth = 800; 
+        const scale = Math.min(1, maxWidth / video.videoWidth);
+        canvas.width = video.videoWidth * scale;
+        canvas.height = video.videoHeight * scale;
+
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        
+        const imageDataUrl = canvas.toDataURL('image/jpeg', 0.7); // Compress to JPEG, 70% quality
+
+        const { lat, lng } = this.userMarker.getLatLng();
+
+        const photoData = {
+            id: String(Date.now()) + '_' + Math.random().toString(36).substr(2, 9), // Unique ID
+            lat,
+            lng,
+            timestamp: Date.now(),
+            imageDataUrl
+        };
+
+        this.currentTrailPhotos.push(photoData);
+        this.updateStatus(`Photo captured! (${this.currentTrailPhotos.length} total for this trail)`);
+        this.closeCamera();
+    }
+
+    viewPhoto(imageDataUrl) {
+        this.dom.photoDisplay.src = imageDataUrl;
+        this.dom.photoViewModal.style.display = 'flex';
+    }
+
+    closePhotoViewModal() {
+        this.dom.photoDisplay.src = ''; // Clear image to free memory
+        this.dom.photoViewModal.style.display = 'none';
+    }
+
 }
 
 // Global functions for modal buttons
