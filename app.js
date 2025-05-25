@@ -6,7 +6,21 @@ class TrailTracker {
         this.currentTrailPolyline = null;
         this.isRecording = false;
         this.watchId = null;
-        this.savedTrails = this.loadTrails();
+        
+        // Cache DOM elements
+        this.dom = {
+            recordBtn: document.getElementById('recordBtn'),
+            saveBtn: document.getElementById('saveBtn'),
+            trailsBtn: document.getElementById('trailsBtn'),
+            saveModal: document.getElementById('saveModal'),
+            trailNameInput: document.getElementById('trailName'),
+            trailDescriptionInput: document.getElementById('trailDescription'),
+            trailsModal: document.getElementById('trailsModal'),
+            trailsListContainer: document.getElementById('trailsList'),
+            statusDisplay: document.getElementById('status'),
+        };
+        
+        this.savedTrails = this.loadTrails(); // Load trails and ensure IDs are strings
         this.displayedTrails = new Map();
         
         this.initMap();
@@ -23,9 +37,9 @@ class TrailTracker {
     }
 
     setupEventListeners() {
-        document.getElementById('recordBtn').addEventListener('click', () => this.toggleRecording());
-        document.getElementById('saveBtn').addEventListener('click', () => this.showSaveModal());
-        document.getElementById('trailsBtn').addEventListener('click', () => this.showTrailsModal());
+        this.dom.recordBtn.addEventListener('click', () => this.toggleRecording());
+        this.dom.saveBtn.addEventListener('click', () => this.showSaveModal());
+        this.dom.trailsBtn.addEventListener('click', () => this.showTrailsModal());
     }
 
     startLocationTracking() {
@@ -50,7 +64,6 @@ class TrailTracker {
         const lng = position.coords.longitude;
         const accuracy = position.coords.accuracy;
 
-        // Update user marker
         if (!this.userMarker) {
             this.userMarker = L.marker([lat, lng]).addTo(this.map);
             this.map.setView([lat, lng], 16);
@@ -60,7 +73,6 @@ class TrailTracker {
 
         this.updateStatus(`Accuracy: ${Math.round(accuracy)}m`);
 
-        // Add to current trail if recording
         if (this.isRecording) {
             const point = {
                 lat,
@@ -94,18 +106,15 @@ class TrailTracker {
     }
 
     toggleRecording() {
-        const btn = document.getElementById('recordBtn');
-        const saveBtn = document.getElementById('saveBtn');
-
         if (!this.isRecording) {
             this.startRecording();
-            btn.textContent = 'Stop Recording';
-            btn.classList.add('recording');
-            saveBtn.style.display = 'block';
+            this.dom.recordBtn.textContent = 'Stop Recording';
+            this.dom.recordBtn.classList.add('recording');
+            this.dom.saveBtn.style.display = 'block';
         } else {
             this.stopRecording();
-            btn.textContent = 'Start Recording';
-            btn.classList.remove('recording');
+            this.dom.recordBtn.textContent = 'Start Recording';
+            this.dom.recordBtn.classList.remove('recording');
         }
     }
 
@@ -140,13 +149,13 @@ class TrailTracker {
             alert('No trail data to save');
             return;
         }
-        document.getElementById('saveModal').style.display = 'flex';
-        document.getElementById('trailName').focus();
+        this.dom.saveModal.style.display = 'flex';
+        this.dom.trailNameInput.focus();
     }
 
     saveTrail() {
-        const name = document.getElementById('trailName').value.trim();
-        const description = document.getElementById('trailDescription').value.trim();
+        const name = this.dom.trailNameInput.value.trim();
+        const description = this.dom.trailDescriptionInput.value.trim();
 
         if (!name) {
             alert('Please enter a trail name');
@@ -154,7 +163,7 @@ class TrailTracker {
         }
 
         const trail = {
-            id: Date.now(),
+            id: String(Date.now()), // Ensure ID is a string
             name,
             description,
             points: this.currentTrail,
@@ -203,27 +212,31 @@ class TrailTracker {
             this.map.removeLayer(this.currentTrailPolyline);
             this.currentTrailPolyline = null;
         }
-        document.getElementById('saveBtn').style.display = 'none';
-        document.getElementById('recordBtn').textContent = 'Start Recording';
-        document.getElementById('recordBtn').classList.remove('recording');
+        this.dom.saveBtn.style.display = 'none';
+        this.dom.recordBtn.textContent = 'Start Recording';
+        this.dom.recordBtn.classList.remove('recording');
         this.isRecording = false;
     }
 
     showTrailsModal() {
         this.renderTrailsList();
-        document.getElementById('trailsModal').style.display = 'flex';
+        this.dom.trailsModal.style.display = 'flex';
     }
 
     renderTrailsList() {
-        const container = document.getElementById('trailsList');
+        const container = this.dom.trailsListContainer;
         container.innerHTML = '';
 
         if (this.savedTrails.length === 0) {
             container.innerHTML = '<p style="text-align: center; color: #aaa;">No saved trails</p>';
             return;
         }
+        
+        // Sort by creation date, newest first
+        const sortedTrails = [...this.savedTrails].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-        this.savedTrails.sort((a, b) => b.createdAt - a.createdAt).forEach(trail => {
+        sortedTrails.forEach(trail => {
+            // trail.id is now guaranteed to be a string
             const isDisplayed = this.displayedTrails.has(trail.id);
             const item = document.createElement('div');
             item.className = 'trail-item';
@@ -242,19 +255,17 @@ class TrailTracker {
         });
     }
 
-    showTrail(trailId) {
-        const trail = this.savedTrails.find(t => t.id == trailId);
+    showTrail(trailId) { // trailId is a string from onclick attribute
+        const trail = this.savedTrails.find(t => t.id === trailId); // t.id is string, trailId is string
         if (!trail) return;
 
-        // Remove previously displayed trail if exists
         if (this.displayedTrails.has(trailId)) {
             this.map.removeLayer(this.displayedTrails.get(trailId));
             this.displayedTrails.delete(trailId);
-            this.renderTrailsList(); // Update button states
+            this.renderTrailsList(); // Update button states in the modal
             return;
         }
 
-        // Display the trail
         const latlngs = trail.points.map(point => [point.lat, point.lng]);
         const polyline = L.polyline(latlngs, {
             color: '#2ed573',
@@ -264,16 +275,15 @@ class TrailTracker {
 
         this.displayedTrails.set(trailId, polyline);
         this.map.fitBounds(polyline.getBounds());
-        this.renderTrailsList(); // Update button states
-        this.closeTrailsModal();
+        this.renderTrailsList(); // Update button states in the modal
+        this.closeTrailsModal(); // Close modal after showing trail on map
     }
 
-    deleteTrail(trailId) {
+    deleteTrail(trailId) { // trailId is a string
         if (confirm('Are you sure you want to delete this trail?')) {
-            this.savedTrails = this.savedTrails.filter(t => t.id != trailId);
+            this.savedTrails = this.savedTrails.filter(t => t.id !== trailId); // t.id is string
             this.saveTrails();
             
-            // Remove from map if displayed
             if (this.displayedTrails.has(trailId)) {
                 this.map.removeLayer(this.displayedTrails.get(trailId));
                 this.displayedTrails.delete(trailId);
@@ -287,10 +297,13 @@ class TrailTracker {
         const saved = localStorage.getItem('gpsTrails');
         try {
             const trails = saved ? JSON.parse(saved) : [];
-            // Ensure trails are objects and have an id
-            return trails.filter(trail => typeof trail === 'object' && trail !== null && 'id' in trail);
+            // Ensure trails are objects, have an id, and convert id to string for consistency
+            return trails
+                .filter(trail => typeof trail === 'object' && trail !== null && 'id' in trail)
+                .map(trail => ({ ...trail, id: String(trail.id) }));
         } catch (e) {
             console.error("Error parsing saved trails:", e);
+            localStorage.removeItem('gpsTrails'); // Clear corrupted data
             return [];
         }
     }
@@ -300,17 +313,17 @@ class TrailTracker {
     }
 
     updateStatus(message) {
-        document.getElementById('status').textContent = message;
+        this.dom.statusDisplay.textContent = message;
     }
 
     closeSaveModal() {
-        document.getElementById('saveModal').style.display = 'none';
-        document.getElementById('trailName').value = '';
-        document.getElementById('trailDescription').value = '';
+        this.dom.saveModal.style.display = 'none';
+        this.dom.trailNameInput.value = '';
+        this.dom.trailDescriptionInput.value = '';
     }
 
     closeTrailsModal() {
-        document.getElementById('trailsModal').style.display = 'none';
+        this.dom.trailsModal.style.display = 'none';
     }
 }
 
