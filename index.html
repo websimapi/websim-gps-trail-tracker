@@ -247,7 +247,7 @@
                 this.map = L.map('map').setView([0, 0], 16);
                 
                 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                    attribution: '© OpenStreetMap contributors'
+                    attribution: ' OpenStreetMap contributors'
                 }).addTo(this.map);
             }
 
@@ -453,6 +453,7 @@
                 }
 
                 this.savedTrails.forEach(trail => {
+                    const isDisplayed = this.displayedTrails.has(trail.id);
                     const item = document.createElement('div');
                     item.className = 'trail-item';
                     item.innerHTML = `
@@ -462,7 +463,7 @@
                             ${trail.description ? `<div style="margin-top: 5px; color: #ccc;">${trail.description}</div>` : ''}
                         </div>
                         <div class="trail-actions">
-                            <button class="btn btn-small" style="background: #5352ed;" onclick="app.showTrail('${trail.id}')">Show</button>
+                            <button class="btn btn-small" style="background: ${isDisplayed ? '#ff9500' : '#5352ed'};" onclick="app.showTrail('${trail.id}')">${isDisplayed ? 'Hide' : 'Show'}</button>
                             <button class="btn btn-small" style="background: #ff4757;" onclick="app.deleteTrail('${trail.id}')">Delete</button>
                         </div>
                     `;
@@ -478,6 +479,7 @@
                 if (this.displayedTrails.has(trailId)) {
                     this.map.removeLayer(this.displayedTrails.get(trailId));
                     this.displayedTrails.delete(trailId);
+                    this.renderTrailsList(); // Update button states
                     return;
                 }
 
@@ -491,6 +493,7 @@
 
                 this.displayedTrails.set(trailId, polyline);
                 this.map.fitBounds(polyline.getBounds());
+                this.renderTrailsList(); // Update button states
                 this.closeTrailsModal();
             }
 
@@ -552,4 +555,3 @@
 <script defer src="https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516" integrity="sha512-8DS7rgIrAmghBFwoOTujcf6D9rXvH8xm8JQ1Ja01h9QX8EzXldiszufYa4IFfKdLUKTTrnSFXLDkUEOTrZQ8Qg==" data-cf-beacon='{"version":"2024.11.0","token":"4c6229722a6346bc8eb5cb0e5eae5d41","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
 </body>
 </html>
-
